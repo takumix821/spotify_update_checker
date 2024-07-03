@@ -3,7 +3,7 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import requests
 import json
 import os
@@ -12,8 +12,9 @@ from sqlalchemy import create_engine, Table, MetaData
 from sqlalchemy.orm import sessionmaker
 
 
+
 def refresh_access_token():
-    token_file_path = '/Users/alionking821/Library/CloudStorage/OneDrive-個人/spotify_ranking_checker/tokens.json'
+    token_file_path = '/home/ubuntu/spotify_update_checker/tokens.json'
     if os.path.exists(token_file_path):
         with open(token_file_path, 'r') as token_file:
             exist_token_data = json.load(token_file)
@@ -38,7 +39,7 @@ def refresh_access_token():
     if 'refresh_token' in token_data:
         refresh_token = token_data['refresh_token']
 
-    with open('/Users/alionking821/Library/CloudStorage/OneDrive-個人/spotify_ranking_checker/tokens.json', 'w') as token_file:
+    with open('/home/ubuntu/spotify_update_checker/tokens.json', 'w') as token_file:
         json.dump(token_data, token_file)
 
 # by playlist -> get tracks
@@ -294,7 +295,7 @@ def get_track_feature(headers, track_list, max_idn = 100):
 def task_1(**kwargs):
     refresh_access_token()
 
-    token_file_path = '/Users/alionking821/Library/CloudStorage/OneDrive-個人/spotify_ranking_checker/tokens.json'
+    token_file_path = '/home/ubuntu/spotify_update_checker/tokens.json'
     if os.path.exists(token_file_path):
         with open(token_file_path, 'r') as token_file:
             exist_token_data = json.load(token_file)
@@ -310,7 +311,7 @@ def task_1(**kwargs):
 # ----- JP top 50 ----- 
 def task_2(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     playlist_id_jptop50 = '37i9dQZEVXbKXQ4mDTEBXq'
@@ -375,7 +376,7 @@ def task_2(**kwargs):
 # ----- Global top 50 ----- 
 def task_3(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     playlist_id_glbtop50 = '37i9dQZEVXbNG2KDcFcKOF'
@@ -444,7 +445,7 @@ def task_3(**kwargs):
 # ----- get_following_artist ----- 
 def task_4(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     following_atrists_table = get_following_artist(headers)
@@ -464,7 +465,7 @@ def task_4(**kwargs):
 # ----- my save tracks ----- 
 def task_5(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     mysave_table, mysave_album_info, mysave_track_artists = playlist_get_tracks(headers)
@@ -529,7 +530,7 @@ def task_5(**kwargs):
 # ----- my recently played ----- 
 def task_6(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     my_recently_table, my_recently_album_info, my_recently_track_artists = my_recently_played(headers)
@@ -549,10 +550,14 @@ def task_6(**kwargs):
     query_my_recently_played_exist = session.query(my_recently_played_db)
     my_recently_played_exist = pd.read_sql(query_my_recently_played_exist.statement, query_my_recently_played_exist.session.bind)
     # campare db & new data
+    my_recently_played_exist['played_at'] = pd.to_datetime(my_recently_played_exist['played_at'], errors='coerce')
     my_recently_played_exist['played_at'] = my_recently_played_exist['played_at'].dt.floor('S').dt.tz_localize('UTC') # set data from DB as UTC timezone
     my_recently_table_insert['played_at'] = my_recently_table_insert['played_at'].dt.floor('S')
     # insert
-    to_insert = my_recently_table_insert[my_recently_table_insert['played_at'] > max(my_recently_played_exist['played_at'])]
+    if len(my_recently_played_exist['played_at']) > 0:
+        to_insert = my_recently_table_insert[my_recently_table_insert['played_at'] > max(my_recently_played_exist['played_at'])]
+    else:
+        to_insert = my_recently_table_insert
     to_insert.to_sql('my_recently_played', con = engine, if_exists = 'append', index = False)
 
 
@@ -609,7 +614,7 @@ def task_6(**kwargs):
 # ----- Track Info ----- 
 def task_7(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     # 建立 Session
@@ -657,7 +662,7 @@ def task_7(**kwargs):
     # filter the track not in track_info_update table
     update_track_list = []
     for track in list(mysave_daily_exist['track_id']) + list(jptop50_daily_exist['track_id']) + list(my_recently_played_exist['track_id']) + list(glbtop50_daily_exist['track_id']):
-        if track not in track_info_exist['track_id']:
+        if track not in list(track_info_exist['track_id']):
             update_track_list.append(track)
     unique_update_track_list = list(set(update_track_list))
 
@@ -676,7 +681,7 @@ def task_7(**kwargs):
 # ----- Track Feature ----- 
 def task_8(**kwargs):
     # Create a SQLAlchemy engine to connect to the MySQL database
-    engine = create_engine('mysql+mysqlconnector://dbuser:Vivian_0821@localhost/spotify_project')
+    engine = create_engine('mysql+mysqlconnector://admin:Vivian_0821@database-test1.c5qk2uos632g.ap-southeast-2.rds.amazonaws.com/spotify_project')
 
     headers = kwargs['ti'].xcom_pull(key='headers', task_ids='refresh_access_token')
     # 建立 Session
@@ -724,7 +729,7 @@ def task_8(**kwargs):
     # filter the track not in track_feature_update table
     update_track_list = []
     for track in list(mysave_daily_exist['track_id']) + list(jptop50_daily_exist['track_id']) + list(my_recently_played_exist['track_id']) + list(glbtop50_daily_exist['track_id']):
-        if track not in track_feature_exist['track_id']:
+        if track not in list(track_feature_exist['track_id']):
             update_track_list.append(track)
     unique_update_track_list = list(set(update_track_list))
 
@@ -758,7 +763,7 @@ dag = DAG(
     default_args = default_args,
     description = 'A simple data pipeline for spotify data',
     schedule_interval = '@daily',
-    start_date = days_ago(1),
+    start_date = datetime.now() - timedelta(days=1),
     catchup = False,
 )
 
