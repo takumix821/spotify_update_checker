@@ -326,7 +326,7 @@ def task_2(**kwargs):
     jptop50_table_insert.to_sql('jptop50_daily', con = engine, if_exists = 'append', index = False)
 
     ## jptop50_album_info: update to DB album_info_update if album_id not exist
-    jptop50_album_info_insert = jptop50_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']]
+    jptop50_album_info_insert = jptop50_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']].drop_duplicates()
     # album_info_update table
     metadata = MetaData()
     metadata.reflect(bind = engine)
@@ -393,7 +393,7 @@ def task_3(**kwargs):
 
 
     ## glbtop50_album_info: update to DB album_info_update if album_id not exist
-    glbtop50_album_info_insert = glbtop50_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']]
+    glbtop50_album_info_insert = glbtop50_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']].drop_duplicates()
     # album_info_update table
     metadata = MetaData()
     metadata.reflect(bind = engine)
@@ -480,7 +480,7 @@ def task_5(**kwargs):
     mysave_table_insert.to_sql('mysave_daily', con = engine, if_exists = 'append', index = False)
 
     ## mysave_album_info: update to DB album_info_update if album_id not exist
-    mysave_album_info_insert = mysave_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']]
+    mysave_album_info_insert = mysave_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']].drop_duplicates()
     # album_info_update table
     metadata = MetaData()
     metadata.reflect(bind = engine)
@@ -562,7 +562,7 @@ def task_6(**kwargs):
 
 
     ## my_recently_album_info: update to DB album_info_update if album_id not exist
-    my_recently_album_info_insert = my_recently_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']]
+    my_recently_album_info_insert = my_recently_album_info[['sync_date', 'album_id', 'album_name', 'album_release_date']].drop_duplicates()
     # album_info_update table
     metadata = MetaData()
     metadata.reflect(bind = engine)
