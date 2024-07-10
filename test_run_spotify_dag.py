@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 def refresh_access_token():
-    token_file_path = '/home/ubuntu/spotify_update_checker/tokens.json'
+    token_file_path = '/home/ubuntu/tokens.json'
     if os.path.exists(token_file_path):
         with open(token_file_path, 'r') as token_file:
             exist_token_data = json.load(token_file)
@@ -39,7 +39,7 @@ def refresh_access_token():
     if 'refresh_token' in token_data:
         refresh_token = token_data['refresh_token']
 
-    with open('/home/ubuntu/spotify_update_checker/tokens.json', 'w') as token_file:
+    with open('/home/ubuntu/tokens.json', 'w') as token_file:
         json.dump(token_data, token_file)
 
 # by playlist -> get tracks
@@ -295,7 +295,7 @@ def get_track_feature(headers, track_list, max_idn = 100):
 def task_1(**kwargs):
     refresh_access_token()
 
-    token_file_path = '/home/ubuntu/spotify_update_checker/tokens.json'
+    token_file_path = '/home/ubuntu/tokens.json'
     if os.path.exists(token_file_path):
         with open(token_file_path, 'r') as token_file:
             exist_token_data = json.load(token_file)
