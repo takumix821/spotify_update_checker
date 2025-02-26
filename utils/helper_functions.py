@@ -5,7 +5,7 @@ import boto3
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, Table, MetaData
+from sqlalchemy import create_engine, Table, MetaData, text
 from sqlalchemy.orm import sessionmaker
 
 
@@ -231,4 +231,159 @@ def upload_following_atrists(following_atrists_table, engine):
     except Exception as e:
         print(f"Error: {e}")
     
+    session.close()
+
+def get_tracks_to_update(engine, table_name):
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    # check if exist in other table or not
+    try:
+        if table_name in ["track_artists", "track_feature", "track_info"]:
+            # all track_id in recently_played table
+            all_tracks = {row[0] for row in session.execute(text("SELECT track_id FROM recently_played"))}
+            exist_tracks = {row[0] for row in session.execute(text(f"SELECT track_id FROM {table_name}"))}
+            tracks_to_update = list(all_tracks - exist_tracks)
+        session.close()
+
+        return tracks_to_update
+    except Exception as e:
+        print(f"Error: {e}. Return empty list!")
+        return []
+
+def get_track_artists(headers, track_list, max_idn = 100):
+    track_artists_list = []
+    for i in range(len(track_list)//max_idn + 1):
+        sub_track_list = track_list[i*max_idn: i*max_idn+max_idn]
+        base_url = 'https://api.spotify.com/v1/tracks?ids=' + ','.join(sub_track_list)
+        response = requests.get(base_url, headers = headers)
+        data = response.json()
+        track_info_json = data.get('tracks')
+
+        if isinstance(track_info_json, list): 
+            for track in track_info_json:
+                for artist in track.get('artists'):
+                    track_artists_data = {
+                        'sync_date': datetime.now(timezone.utc).replace(microsecond = 0), 
+                        'track_id': track.get('id'), 
+                        'artist_id': artist.get('id'), 
+                    }
+                    track_artists_list.append(track_artists_data)
+
+    track_artists_table = pd.DataFrame(track_artists_list)
+    return track_artists_table
+
+def get_track_info(headers, track_list, max_idn = 100):
+    track_info_list = []
+    for i in range(len(track_list)//max_idn + 1):
+        sub_track_list = track_list[i*max_idn: i*max_idn+max_idn]
+        base_url = 'https://api.spotify.com/v1/tracks?ids=' + ','.join(sub_track_list)
+        response = requests.get(base_url, headers = headers)
+        data = response.json()
+        track_info_json = data.get('tracks')
+
+        if isinstance(track_info_json, list): 
+            for track in track_info_json:
+                track_info_data = {
+                    'sync_date': datetime.now(timezone.utc).replace(microsecond = 0), 
+                    'track_duration_ms': int(track.get('duration_ms')), 
+                    'track_id': track.get('id'), 
+                    'track_name': track.get('name'), 
+                }
+                track_info_list.append(track_info_data)
+
+    track_info_table = pd.DataFrame(track_info_list)
+    return track_info_table
+
+def get_track_feature(headers, track_list, max_idn = 100):
+    track_feature_list = []
+    for i in range(len(track_list)//max_idn + 1):
+        sub_track_list = track_list[i*max_idn: i*max_idn+max_idn]
+        base_url = 'https://api.spotify.com/v1/audio-features?ids=' + ','.join(sub_track_list)
+        response = requests.get(base_url, headers = headers)
+        data = response.json()
+        track_feature_json = data.get('audio_features')
+
+        if isinstance(track_feature_json, list): 
+            for track in track_feature_json:
+                track_feature_data = {
+                    'sync_date': datetime.now(timezone.utc).replace(microsecond = 0), 
+                    'track_id': track.get('id'), 
+                    'track_danceability': float(track.get('danceability')), 
+                    'track_energy': float(track.get('energy')), 
+                    'track_key': int(track.get('key')), 
+                    'track_loudness': float(track.get('loudness')), 
+                    'track_mode': int(track.get('mode')), 
+                    'track_speechiness': float(track.get('speechiness')), 
+                    'track_acousticness': float(track.get('acousticness')), 
+                    'track_instrumentalness': float(track.get('instrumentalness')), 
+                    'track_liveness': float(track.get('liveness')), 
+                    'track_valence': float(track.get('valence')), 
+                    'track_tempo': float(track.get('tempo')), 
+                    'track_type': track.get('type'), 
+                    'track_time_signature': int(track.get('time_signature')), 
+                }
+                track_feature_list.append(track_feature_data)
+
+    track_feature_table = pd.DataFrame(track_feature_list)
+    return track_feature_table
+
+def upload_track_artists(track_artists_table, engine):
+    Session = sessionmaker(bind = engine)
+    session = Session()
+    try:
+        track_artists_insert = track_artists_table[['sync_date', 'track_id', 'artist_id']].drop_duplicates()
+        metadata = MetaData()
+        metadata.reflect(bind = engine)
+        track_artists_db = Table('track_artists', metadata, autoload_with = engine)
+        # read db table
+        query = session.query(track_artists_db)
+        track_artists_exist = pd.read_sql(query.statement, query.session.bind)
+        # insert
+        to_insert = track_artists_insert[[track not in list(track_artists_exist['track_id'].unique()) for track in track_artist_insert['track_id']]]
+        to_insert.to_sql('track_artists', con = engine, if_exists = 'append', index = False)
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    session.close()
+
+def upload_track_info(track_info_table, engine):
+    Session = sessionmaker(bind = engine)
+    session = Session()
+    try:
+        track_info_insert = track_info_table[['sync_date', 'track_duration_ms', 'track_id', 'track_name']].drop_duplicates()
+        metadata = MetaData()
+        metadata.reflect(bind = engine)
+        track_info_db = Table('track_info', metadata, autoload_with = engine)
+        # read db table
+        query = session.query(track_info_db)
+        track_info_exist = pd.read_sql(query.statement, query.session.bind)
+        # insert
+        to_insert = track_info_insert[[track not in list(track_info_exist['track_id'].unique()) for track in track_info_insert['track_id']]]
+        to_insert.to_sql('track_info', con = engine, if_exists = 'append', index = False)
+    except Exception as e:
+        print(f"Error: {e}")
+
+    session.close()
+
+def upload_track_feature(track_feature_table, engine):
+    Session = sessionmaker(bind = engine)
+    session = Session()
+    try:
+        track_feature_insert = track_feature_table[[
+            'sync_date', 'track_id', 'track_danceability', 'track_energy', 'track_key', 'track_loudness', 
+            'track_mode', 'track_speechiness', 'track_acousticness', 'track_instrumentalness', 'track_liveness',
+            'track_valence', 'track_tempo', 'track_type', 'track_time_signature'
+        ]].drop_duplicates()
+        metadata = MetaData()
+        metadata.reflect(bind = engine)
+        track_feature_db = Table('track_feature', metadata, autoload_with = engine)
+        # read db table
+        query = session.query(track_feature_db)
+        track_feature_exist = pd.read_sql(query.statement, query.session.bind)
+        # insert
+        to_insert = track_feature_insert[[track not in list(track_feature_exist['track_id'].unique()) for track in track_feature_insert['track_id']]]
+        to_insert.to_sql('track_feature', con = engine, if_exists = 'append', index = False)
+    except Exception as e:
+        print(f"Error: {e}")
+
     session.close()
